@@ -14,10 +14,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'APP_NAME',
-        short_name: 'APP_NAME',
-        description: 'APP_DESCRIPTION',
-        theme_color: '#000000',
+        name: 'アルファベットたまクイズ',
+        short_name: 'アルファベットたまクイズ',
+        description: 'ビリヤードのボールでアルファベットをおぼえよう',
+        theme_color: '#1565c0',
         background_color: '#FFF8E7',
         display: 'standalone',
         icons: [
