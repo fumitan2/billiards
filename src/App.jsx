@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  PW, PH, R, RAIL, POCKET_R, POCKETS, BALL_COLORS, isStripe,
+  PW, PH, R, RAIL, POCKET_R, POCKETS,
   SHOT_MAX_SPEED, FIXED_DT,
-  createGame, cueBall, canPlaceCue, placeCue, advance, allStopped, resolveShot, aimFromDrag,
+  createGame, cueBall, targetBall, canPlaceCue, placeCue, advance, allStopped, resolveShot, aimFromDrag,
 } from './billiards.js'
 
 const APP_VERSION = __APP_VERSION__
@@ -13,6 +13,8 @@ const RAIL_WOOD = '#6d4726'
 
 const TW = PW + 2 * RAIL
 const TH = PH + 2 * RAIL
+
+const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper' }
 
 // ===== 小物 =====
 function roundRect(ctx, x, y, w, h, r) {
@@ -33,8 +35,8 @@ function lerpColor(a, b, t) {
 }
 
 // ===== Canvas 描画 =====
-function drawBall(ctx, x, y, n) {
-  const color = BALL_COLORS[n]
+function drawBall(ctx, x, y, ball) {
+  const { color, stripe, label, isCue } = ball
   // 影
   ctx.beginPath()
   ctx.ellipse(x, y + R * 0.55, R * 0.95, R * 0.55, 0, 0, Math.PI * 2)
@@ -45,7 +47,7 @@ function drawBall(ctx, x, y, n) {
   ctx.beginPath()
   ctx.arc(x, y, R, 0, Math.PI * 2)
   ctx.clip()
-  if (isStripe(n)) {
+  if (stripe) {
     ctx.fillStyle = '#fdfcf8'
     ctx.fillRect(x - R, y - R, 2 * R, 2 * R)
     ctx.fillStyle = color
@@ -62,17 +64,17 @@ function drawBall(ctx, x, y, n) {
   ctx.fillStyle = g
   ctx.fillRect(x - R, y - R, 2 * R, 2 * R)
   ctx.restore()
-  // 数字
-  if (n !== 0) {
+  // ラベル（手球は無し）
+  if (!isCue && label != null) {
     ctx.beginPath()
-    ctx.arc(x, y, R * 0.52, 0, Math.PI * 2)
+    ctx.arc(x, y, R * 0.54, 0, Math.PI * 2)
     ctx.fillStyle = '#fdfcf8'
     ctx.fill()
     ctx.fillStyle = '#1a1a2e'
-    ctx.font = `800 ${R * 0.72}px 'Nunito', sans-serif`
+    ctx.font = `800 ${R * 0.7}px 'Nunito', sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(String(n), x, y + R * 0.06)
+    ctx.fillText(label, x, y + R * 0.06)
   }
   // 輪郭
   ctx.beginPath()
@@ -144,8 +146,7 @@ function drawGhost(ctx, x, y, ok) {
 }
 
 // ===== ボールチップ（UI内のターゲット表示）=====
-function BallChip({ n, size = 28 }) {
-  const color = BALL_COLORS[n]
+function BallChip({ label, color = '#ccc', stripe = false, size = 28 }) {
   return (
     <span
       style={{
@@ -155,7 +156,7 @@ function BallChip({ n, size = 28 }) {
         width: size,
         height: size,
         borderRadius: '50%',
-        background: isStripe(n) ? `linear-gradient(#fff 30%, ${color} 30%, ${color} 70%, #fff 70%)` : color,
+        background: stripe ? `linear-gradient(#fff 30%, ${color} 30%, ${color} 70%, #fff 70%)` : color,
         boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
         verticalAlign: 'middle',
       }}
@@ -167,14 +168,14 @@ function BallChip({ n, size = 28 }) {
           borderRadius: '50%',
           background: '#fdfcf8',
           color: '#1a1a2e',
-          fontSize: size * 0.42,
+          fontSize: size * 0.4,
           fontWeight: 800,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        {n}
+        {label}
       </span>
     </span>
   )
@@ -310,27 +311,81 @@ function GuideModal({ onClose }) {
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalTitle}>あそびかた</div>
-        <p style={styles.modalText}>🎱 1ばんから じゅんばんに ボールを ポケットに いれて、さいごに 9ばんを いれたら クリア！</p>
+        <p style={styles.modalText}>🎱 ちいさい じゅんばんに ボールを ポケットに いれて、さいごの ボールを いれたら クリア！</p>
         <p style={styles.modalText}>① しろたまを おくところを <b>タップ</b></p>
         <p style={styles.modalText}>② がめんを <b>ドラッグ</b>して むき と つよさを きめる（うしろに ひくほど つよい）</p>
         <p style={styles.modalText}>③ ゆびを <b>はなす</b>と ショット！</p>
         <p style={styles.modalText}>つぎに ねらう ボールは うえに でるよ。</p>
+        <p style={styles.modalText}>⚙️から <b>すうじ / えいご</b>の モードを えらべるよ。</p>
         <button style={styles.closeBtn} onClick={onClose}>とじる</button>
       </div>
     </div>
   )
 }
 
-function SettingsModal({ onClose, onReset }) {
+function Pill({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: '1 1 0',
+        minWidth: 80,
+        padding: '10px 6px',
+        borderRadius: 12,
+        border: active ? `3px solid ${THEME_COLOR}` : '3px solid #e0e0e0',
+        background: active ? THEME_COLOR : '#fff',
+        color: active ? '#fff' : '#666',
+        fontSize: 14,
+        fontWeight: 800,
+        fontFamily: "'Nunito', sans-serif",
+        cursor: 'pointer',
+        minHeight: 48,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SettingsModal({ options, onApply, onReset, onClose }) {
+  const [mode, setMode] = useState(options.mode)
+  const [caseMode, setCaseMode] = useState(options.caseMode)
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalTitle}>せってい</div>
-        <button style={{ ...styles.closeBtn, backgroundColor: '#f4511e', marginTop: 0 }} onClick={onReset}>
-          さいしょから やりなおす
+
+        <div style={{ fontSize: 14, fontWeight: 800, color: '#666', marginBottom: 8 }}>ボールの モード</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <Pill active={mode === 'number'} onClick={() => setMode('number')}>すうじ 1-9</Pill>
+          <Pill active={mode === 'english'} onClick={() => setMode('english')}>えいご ABC</Pill>
+        </div>
+
+        {mode === 'english' && (
+          <>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#666', marginBottom: 8 }}>もじの しゅるい</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <Pill active={caseMode === 'upper'} onClick={() => setCaseMode('upper')}>大もじ ABC</Pill>
+              <Pill active={caseMode === 'lower'} onClick={() => setCaseMode('lower')}>小もじ abc</Pill>
+              <Pill active={caseMode === 'mix'} onClick={() => setCaseMode('mix')}>ミックス Ab</Pill>
+            </div>
+            <p style={{ ...styles.modalText, fontSize: 13, color: '#888' }}>
+              ※ アルファベットは ランダムな もじから 9こ じゅんばんに ならぶよ
+            </p>
+          </>
+        )}
+
+        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode })}>
+          このモードで はじめる
+        </button>
+        <button
+          style={{ ...styles.closeBtn, backgroundColor: '#f4511e', marginTop: 10 }}
+          onClick={onReset}
+        >
+          いまのモードで やりなおす
         </button>
         <p style={styles.versionText}>v{APP_VERSION}</p>
-        <button style={styles.closeBtn} onClick={onClose}>とじる</button>
+        <button style={{ ...styles.closeBtn, backgroundColor: '#999' }} onClick={onClose}>とじる</button>
       </div>
     </div>
   )
@@ -338,21 +393,36 @@ function SettingsModal({ onClose, onReset }) {
 
 export default function App() {
   const canvasRef = useRef(null)
-  const gameRef = useRef(createGame())
+  const gameRef = useRef(createGame(DEFAULT_OPTIONS))
   const aimRef = useRef(null)
   const ghostRef = useRef(null)
 
   const [showGuide, setShowGuide] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [ui, setUi] = useState({ phase: 'ballInHand', target: 1, message: '', shots: 0, fouls: 0 })
+  const [options, setOptions] = useState(DEFAULT_OPTIONS)
+  const [ui, setUi] = useState({
+    phase: 'ballInHand', target: 1, targetLabel: '1', targetColor: '#f6c500', targetStripe: false,
+    message: '', shots: 0, fouls: 0,
+  })
 
   const syncUI = () => {
     const g = gameRef.current
-    setUi({ phase: g.phase, target: g.target, message: g.message, shots: g.shots, fouls: g.fouls })
+    const tb = targetBall(g)
+    setUi({
+      phase: g.phase,
+      target: g.target,
+      targetLabel: tb ? tb.label : '',
+      targetColor: tb ? tb.color : '#ccc',
+      targetStripe: tb ? tb.stripe : false,
+      message: g.message,
+      shots: g.shots,
+      fouls: g.fouls,
+    })
   }
 
-  const resetGame = () => {
-    gameRef.current = createGame()
+  const startGame = (opts) => {
+    setOptions(opts)
+    gameRef.current = createGame(opts)
     aimRef.current = null
     ghostRef.current = null
     syncUI()
@@ -418,7 +488,7 @@ export default function App() {
       }
       // ボール
       for (const b of g.balls) {
-        if (b.active) drawBall(ctx, b.x + RAIL, b.y + RAIL, b.n)
+        if (b.active) drawBall(ctx, b.x + RAIL, b.y + RAIL, b)
       }
     }
 
@@ -534,7 +604,7 @@ export default function App() {
       <div style={styles.statusBar}>
         <div style={styles.targetBox}>
           <span>ねらう</span>
-          <BallChip n={ui.target} />
+          <BallChip label={ui.targetLabel} color={ui.targetColor} stripe={ui.targetStripe} />
         </div>
         <div style={styles.counter}>ショット {ui.shots}・ファウル {ui.fouls}</div>
       </div>
@@ -546,7 +616,14 @@ export default function App() {
       </div>
 
       {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onReset={resetGame} />}
+      {showSettings && (
+        <SettingsModal
+          options={options}
+          onApply={startGame}
+          onReset={() => startGame(options)}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
 
       {ui.phase === 'won' && (
         <div style={styles.overlay}>
@@ -556,7 +633,7 @@ export default function App() {
             <div style={{ fontSize: 16, fontWeight: 700, color: '#666', marginBottom: 20 }}>
               {ui.shots} ショット・ファウル {ui.fouls}かい
             </div>
-            <button style={styles.bigBtn} onClick={resetGame}>もういちど</button>
+            <button style={styles.bigBtn} onClick={() => startGame(options)}>もういちど</button>
           </div>
         </div>
       )}
