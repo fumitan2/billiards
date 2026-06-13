@@ -14,12 +14,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'アルファベットたまクイズ',
-        short_name: 'アルファベットたまクイズ',
-        description: 'ビリヤードのボールでアルファベットをおぼえよう',
-        theme_color: '#1565c0',
+        name: 'ナインボール',
+        short_name: 'ナインボール',
+        description: 'ビリヤードのナインボールで あそぼう',
+        theme_color: '#1f7a44',
         background_color: '#FFF8E7',
         display: 'standalone',
+        orientation: 'portrait',
         icons: [
           {
             src: 'icons/icon-192.png',
