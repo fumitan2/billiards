@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   R, RAIL,
   SHOT_MAX_SPEED, FIXED_DT,
-  createGame, cueBall, targetBall, canPlaceCue, placeCue, advance, allStopped, resolveShot, aimFromDrag,
+  createGame, cueBall, targetBall, canPlaceCue, placeCue, advance, allStopped, resolveShot, aimFromDrag, readingOf,
 } from './billiards.js'
 
 const APP_VERSION = __APP_VERSION__
@@ -267,11 +267,11 @@ const styles = {
   targetBox: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    fontSize: 16,
-    fontWeight: 800,
+    gap: 10,
     color: '#1a1a2e',
   },
+  targetLabelText: { fontSize: 15, fontWeight: 800, color: '#666' },
+  targetReading: { fontSize: 26, fontWeight: 800, color: THEME_COLOR },
   counter: { fontSize: 14, fontWeight: 700, color: '#666' },
   message: {
     minHeight: 24,
@@ -517,7 +517,7 @@ export default function App() {
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [ui, setUi] = useState({
     phase: 'ballInHand', target: 1, targetLabel: '1', targetColor: '#f6c500', targetStripe: false,
-    message: '', shots: 0, fouls: 0,
+    targetReading: 'いち', message: '', shots: 0, fouls: 0,
   })
 
   const syncUI = () => {
@@ -529,6 +529,7 @@ export default function App() {
       targetLabel: tb ? tb.label : '',
       targetColor: tb ? tb.color : '#ccc',
       targetStripe: tb ? tb.stripe : false,
+      targetReading: readingOf(g, g.target),
       message: g.message,
       shots: g.shots,
       fouls: g.fouls,
@@ -740,8 +741,9 @@ export default function App() {
 
       <div style={styles.statusBar}>
         <div style={styles.targetBox}>
-          <span>ねらう</span>
-          <BallChip label={ui.targetLabel} color={ui.targetColor} stripe={ui.targetStripe} />
+          <span style={styles.targetLabelText}>ねらう</span>
+          <BallChip label={ui.targetLabel} color={ui.targetColor} stripe={ui.targetStripe} size={52} />
+          <span style={styles.targetReading}>{ui.targetReading}</span>
         </div>
         <div style={styles.counter}>ショット {ui.shots}・ファウル {ui.fouls}</div>
       </div>

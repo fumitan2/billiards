@@ -70,6 +70,29 @@ export function refOf(game, order) {
   return noBan ? label : `${label}ばん`
 }
 
+// ===== よみかた =====
+const NUM_YOMI = ['いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう']
+const LATIN_YOMI = {
+  A: 'エー', B: 'ビー', C: 'シー', D: 'ディー', E: 'イー', F: 'エフ', G: 'ジー', H: 'エイチ',
+  I: 'アイ', J: 'ジェー', K: 'ケー', L: 'エル', M: 'エム', N: 'エヌ', O: 'オー', P: 'ピー',
+  Q: 'キュー', R: 'アール', S: 'エス', T: 'ティー', U: 'ユー', V: 'ブイ', W: 'ダブリュー',
+  X: 'エックス', Y: 'ワイ', Z: 'ゼット',
+}
+const GREEK_NAMES = ['アルファ', 'ベータ', 'ガンマ', 'デルタ', 'イプシロン', 'ゼータ', 'イータ', 'シータ', 'イオタ', 'カッパ', 'ラムダ', 'ミュー', 'ニュー', 'クサイ', 'オミクロン', 'パイ', 'ロー', 'シグマ', 'タウ', 'ウプシロン', 'ファイ', 'カイ', 'プサイ', 'オメガ']
+const GREEK_YOMI = {}
+GREEK_UPPER.forEach((ch, i) => { GREEK_YOMI[ch] = GREEK_NAMES[i] })
+GREEK_LOWER.forEach((ch, i) => { GREEK_YOMI[ch] = GREEK_NAMES[i] })
+
+// ターゲットの「よみかた」を返す（モードに応じて）
+export function readingOf(game, order) {
+  const b = game.balls.find((x) => !x.isCue && x.order === order)
+  if (!b) return ''
+  const m = game.mode
+  if (m === 'english') return LATIN_YOMI[b.label.toUpperCase()] || ''
+  if (m === 'greek-upper' || m === 'greek-lower') return GREEK_YOMI[b.label] || ''
+  return NUM_YOMI[order - 1] || '' // number / kanji / kanji-old / roman は順番の数の読み
+}
+
 // ===== 幾何ヘルパー =====
 const len = (x, y) => Math.hypot(x, y)
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
