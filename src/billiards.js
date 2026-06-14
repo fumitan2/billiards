@@ -277,6 +277,7 @@ export function createGame(options = {}) {
   })
   return {
     balls, table, mode, caseMode, ballCount, rackSpots: spots,
+    autoScroll: !!options.autoScroll,
     phase: 'ballInHand',
     target: 1, shots: 0, fouls: 0,
     message: 'しろたまを おくところを タップしてね',

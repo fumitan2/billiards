@@ -11,7 +11,7 @@ const THEME_COLOR = '#1565c0'
 const FELT_GREEN = '#1f7a44'
 const RAIL_WOOD = '#6d4726'
 
-const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pocketSize: 'm', ballCount: 9 }
+const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pocketSize: 'm', ballCount: 9, autoScroll: false }
 
 // 横スクロール用の左右余白（ワールド単位）。端からのショットでキューを引く余地を作る。
 const MARGIN = 175
@@ -378,7 +378,7 @@ function GuideModal({ onClose }) {
         <p style={styles.modalText}>② がめんを <b>ドラッグ</b>して むき と つよさを きめる（うしろに ひくほど つよい）</p>
         <p style={styles.modalText}>③ ゆびを <b>はなす</b>と ショット！</p>
         <p style={styles.modalText}>つぎに ねらう ボールは うえに でるよ。</p>
-        <p style={styles.modalText}>はしを ねらうときは、したの スライダーや ボタンで フィールドを よこに うごかせるよ。ドラッグ中は じどうで スクロールするよ。</p>
+        <p style={styles.modalText}>はしを ねらうときは、したの スライダーや ボタンで フィールドを よこに うごかせるよ。⚙️で「じどう よこスクロール」を オンにもできるよ。</p>
         <p style={styles.modalText}>⚙️から <b>すうじ / えいご / かんすうじ / ローマ / ギリシャ</b>、テーブルの <b>かたち</b>、<b>あなの おおきさ</b>、<b>ボールの かず</b>を えらべるよ。</p>
         <button style={styles.closeBtn} onClick={onClose}>とじる</button>
       </div>
@@ -419,6 +419,7 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
   const [shape, setShape] = useState(options.shape)
   const [pocketSize, setPocketSize] = useState(options.pocketSize)
   const [ballCount, setBallCount] = useState(options.ballCount)
+  const [autoScroll, setAutoScroll] = useState(options.autoScroll)
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={{ ...styles.modal, maxHeight: '86vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
@@ -472,7 +473,16 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
           <Pill active={pocketSize === 'l'} onClick={() => setPocketSize('l')}>おおきい</Pill>
         </div>
 
-        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode, shape, pocketSize, ballCount })}>
+        <div style={SECTION}>じどう よこスクロール</div>
+        <div style={ROW}>
+          <Pill active={!autoScroll} onClick={() => setAutoScroll(false)}>オフ</Pill>
+          <Pill active={autoScroll} onClick={() => setAutoScroll(true)}>オン</Pill>
+        </div>
+        <p style={{ ...styles.modalText, fontSize: 13, color: '#888' }}>
+          ※ オンにすると、ねらう ドラッグが はしに きたとき じどうで スクロールします
+        </p>
+
+        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode, shape, pocketSize, ballCount, autoScroll })}>
           このせっていで はじめる
         </button>
         <button
@@ -609,8 +619,8 @@ export default function App() {
           syncUI()
         }
       }
-      // 照準ドラッグが端にあるとき、フィールドを自動スクロール
-      if (g.phase === 'aiming' && dragging && lastClient) {
+      // 照準ドラッグが端にあるとき、フィールドを自動スクロール（設定がオンのときだけ）
+      if (g.autoScroll && g.phase === 'aiming' && dragging && lastClient) {
         const tbl = g.table
         const rect = canvas.getBoundingClientRect()
         const fx = (lastClient.clientX - rect.left) / rect.width
