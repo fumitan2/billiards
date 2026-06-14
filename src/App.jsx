@@ -11,7 +11,7 @@ const THEME_COLOR = '#1565c0'
 const FELT_GREEN = '#1f7a44'
 const RAIL_WOOD = '#6d4726'
 
-const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pocketSize: 'm' }
+const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pocketSize: 'm', ballCount: 9 }
 
 // ===== 小物 =====
 function roundRect(ctx, x, y, w, h, r) {
@@ -394,10 +394,18 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
   const [caseMode, setCaseMode] = useState(options.caseMode)
   const [shape, setShape] = useState(options.shape)
   const [pocketSize, setPocketSize] = useState(options.pocketSize)
+  const [ballCount, setBallCount] = useState(options.ballCount)
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={{ ...styles.modal, maxHeight: '86vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalTitle}>せってい</div>
+
+        <div style={SECTION}>ボールの かず</div>
+        <div style={ROW}>
+          <Pill active={ballCount === 3} onClick={() => setBallCount(3)}>3こ</Pill>
+          <Pill active={ballCount === 5} onClick={() => setBallCount(5)}>5こ</Pill>
+          <Pill active={ballCount === 9} onClick={() => setBallCount(9)}>9こ</Pill>
+        </div>
 
         <div style={SECTION}>ボールの モード</div>
         <div style={ROW}>
@@ -435,7 +443,7 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
           <Pill active={pocketSize === 'l'} onClick={() => setPocketSize('l')}>おおきい</Pill>
         </div>
 
-        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode, shape, pocketSize })}>
+        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode, shape, pocketSize, ballCount })}>
           このせっていで はじめる
         </button>
         <button

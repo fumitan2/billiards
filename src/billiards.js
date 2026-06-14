@@ -25,16 +25,16 @@ export const BALL_COLORS = {
   0: '#fdfcf8', 1: '#f6c500', 2: '#1763b8', 3: '#e0322a', 4: '#6a2c91',
   5: '#e87211', 6: '#1f8a3b', 7: '#8a2f2f', 8: '#1a1a1a', 9: '#f6c500',
 }
-export const isStripe = (order) => order === 9
+const MONEY_COLOR = '#f6c500' // マネーボール（最後＝勝ちボール）の色（ストライプ）
 
 // ===== ラベル =====
 const KANJI = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
 const KANJI_OLD = ['壹', '貳', '參', '肆', '伍', '陸', '漆', '捌', '玖']
 
-function makeLabeler(mode, caseMode) {
+function makeLabeler(mode, caseMode, n) {
   if (mode === 'english') {
-    const start = Math.floor(Math.random() * 18) // A..R（連続9文字がZを超えない）
-    const letters = Array.from({ length: 9 }, (_, k) => String.fromCharCode(65 + start + k))
+    const start = Math.floor(Math.random() * (26 - n + 1)) // 連続n文字がZを超えない開始位置
+    const letters = Array.from({ length: n }, (_, k) => String.fromCharCode(65 + start + k))
     const cased = letters.map((ch) => {
       if (caseMode === 'lower') return ch.toLowerCase()
       if (caseMode === 'mix') return Math.random() < 0.5 ? ch : ch.toLowerCase()
@@ -95,20 +95,40 @@ function pointInPolygon(verts, x, y) {
   return inside
 }
 
-// ===== ラック（9ボールのダイヤモンド） =====
+// ===== ラック =====
 // apex（index0）は手球側（下）。rows は上方向へ広がる。
-function diamond(cx, apexY) {
+// 各行は三角格子で半個ずつオフセットされる前提。連続する行の個数を変える
+// （同数だと真上に重なってめり込むため）ことで密に組める形状にする。
+const FORMATIONS = { 3: [1, 2], 5: [2, 3], 9: [1, 2, 3, 2, 1] }
+
+function buildRack(cx, apexY, count) {
+  const rows = FORMATIONS[count] || FORMATIONS[9]
   const rowH = Math.sqrt(3) * R
   const gap = 0.5
-  const rows = [1, 2, 3, 2, 1]
   const spots = []
-  rows.forEach((count, k) => {
+  rows.forEach((c, k) => {
     const y = apexY - k * (rowH + gap)
-    for (let i = 0; i < count; i++) {
-      spots.push({ x: cx + (i - (count - 1) / 2) * (2 * R + gap), y })
+    for (let i = 0; i < c; i++) {
+      spots.push({ x: cx + (i - (c - 1) / 2) * (2 * R + gap), y })
     }
   })
   return spots
+}
+
+// マネーボール（最後＝勝ちボール）を置くスポット：apex以外で重心に最も近い位置
+function moneyIndex(spots) {
+  const cxm = spots.reduce((s, p) => s + p.x, 0) / spots.length
+  const cym = spots.reduce((s, p) => s + p.y, 0) / spots.length
+  let best = 1
+  let bd = Infinity
+  for (let i = 1; i < spots.length; i++) {
+    const d = len(spots[i].x - cxm, spots[i].y - cym)
+    if (d < bd) {
+      bd = d
+      best = i
+    }
+  }
+  return best
 }
 
 // ===== テーブル生成 =====
@@ -131,7 +151,7 @@ export function makeTable(shape = 'rect', pocketSize = 'm') {
       cw: 2 * cx + 2 * RAIL, ch: 2 * cy + 2 * RAIL,
       segments: segsFromVerts(verts),
       pockets,
-      rackSpots: diamond(cx, cy + 8),
+      rackAnchor: { cx, apexY: cy + 8 },
       cueSpot: { x: cx, y: cy + 80 },
       feltKind: 'circle', feltParams: { cx, cy, r: CR },
       contains: (x, y) => len(x - cx, y - cy) <= CR - R,
@@ -158,7 +178,7 @@ export function makeTable(shape = 'rect', pocketSize = 'm') {
       cw: 2 * cx + 2 * RAIL, ch: 2 * cy + 2 * RAIL,
       segments,
       pockets,
-      rackSpots: diamond(cx, cy),
+      rackAnchor: { cx, apexY: cy },
       cueSpot: { x: cx, y: cy + 45 },
       feltKind: 'star', feltParams: { verts },
       contains: (x, y) =>
@@ -180,7 +200,7 @@ export function makeTable(shape = 'rect', pocketSize = 'm') {
     cw: W + 2 * RAIL, ch: H + 2 * RAIL,
     segments: segsFromVerts(verts),
     pockets,
-    rackSpots: diamond(W / 2, H * 0.40),
+    rackAnchor: { cx: W / 2, apexY: H * 0.40 },
     cueSpot: { x: W / 2, y: H * 0.76 },
     feltKind: 'rect', feltParams: { W, H },
     contains: (x, y) => x >= R && x <= W - R && y >= R && y <= H - R,
@@ -191,25 +211,27 @@ export function makeTable(shape = 'rect', pocketSize = 'm') {
 export function createGame(options = {}) {
   const mode = ['english', 'kanji', 'kanji-old'].includes(options.mode) ? options.mode : 'number'
   const caseMode = options.caseMode || 'upper'
-  const label = makeLabeler(mode, caseMode)
+  const ballCount = [3, 5, 9].includes(options.ballCount) ? options.ballCount : 9
+  const label = makeLabeler(mode, caseMode, ballCount)
   const table = makeTable(options.shape, options.pocketSize)
 
-  const spots = table.rackSpots
-  const centerIdx = 3
-  const others = shuffle([2, 3, 4, 5, 6, 7, 8])
-  const orders = new Array(9)
-  orders[0] = 1
-  orders[centerIdx] = 9
+  const spots = buildRack(table.rackAnchor.cx, table.rackAnchor.apexY, ballCount)
+  const mIdx = moneyIndex(spots)
+  const orders = new Array(ballCount)
+  orders[0] = 1 // apex＝最初に狙う
+  orders[mIdx] = ballCount // マネーボール（最後＝勝ち）
+  const rest = shuffle(Array.from({ length: ballCount - 2 }, (_, k) => k + 2)) // 2..ballCount-1
   let oi = 0
-  for (let i = 0; i < 9; i++) {
-    if (i === 0 || i === centerIdx) continue
-    orders[i] = others[oi++]
+  for (let i = 0; i < ballCount; i++) {
+    if (i === 0 || i === mIdx) continue
+    orders[i] = rest[oi++]
   }
   const balls = spots.map((s, i) => {
     const order = orders[i]
+    const isMoney = order === ballCount
     return {
       isCue: false, order, label: label(order),
-      color: BALL_COLORS[order], stripe: isStripe(order),
+      color: isMoney ? MONEY_COLOR : BALL_COLORS[order], stripe: isMoney,
       x: s.x, y: s.y, vx: 0, vy: 0, active: true,
     }
   })
@@ -218,7 +240,7 @@ export function createGame(options = {}) {
     x: table.cueSpot.x, y: table.cueSpot.y, vx: 0, vy: 0, active: false,
   })
   return {
-    balls, table, mode, caseMode,
+    balls, table, mode, caseMode, ballCount, rackSpots: spots,
     phase: 'ballInHand',
     target: 1, shots: 0, fouls: 0,
     message: 'しろたまを おくところを タップしてね',
@@ -354,12 +376,11 @@ export function allStopped(balls) {
 }
 
 function findRespot(game) {
-  const t = game.table
-  const cands = [...t.rackSpots, t.cueSpot]
+  const cands = [...game.rackSpots, game.table.cueSpot]
   for (const c of cands) {
     if (canPlaceCue(game, c.x, c.y)) return c
   }
-  return t.cueSpot
+  return game.table.cueSpot
 }
 
 // ===== ショット解決 =====
@@ -367,25 +388,26 @@ export function resolveShot(game, shotInfo) {
   game.shots += 1
   const cue = cueBall(game)
   const target = game.target
+  const winOrder = game.ballCount // 最後のボール＝勝ちボール
   const targetRef = refOf(game, target)
   const scratch = !cue.active
-  const pocketed9 = shotInfo.pocketed.includes(9)
+  const pocketedWin = shotInfo.pocketed.includes(winOrder)
   const wrongFirst = shotInfo.firstHit !== null && shotInfo.firstHit !== target
   const noHit = shotInfo.firstHit === null
   const foul = scratch || wrongFirst || noHit
   const pottedAny = shotInfo.pocketed.some((o) => o > 0)
 
-  if (pocketed9) {
+  if (pocketedWin) {
     if (!foul) {
       game.phase = 'won'
-      game.message = `🏆 ${refOf(game, 9)} イン！クリア！`
+      game.message = `🏆 ${refOf(game, winOrder)} イン！クリア！`
       return game
     }
-    const nine = game.balls.find((b) => b.order === 9 && !b.isCue)
+    const moneyBall = game.balls.find((b) => b.order === winOrder && !b.isCue)
     const spot = findRespot(game)
-    nine.x = spot.x
-    nine.y = spot.y
-    nine.active = true
+    moneyBall.x = spot.x
+    moneyBall.y = spot.y
+    moneyBall.active = true
   }
 
   game.target = lowestActive(game) ?? 9
