@@ -29,13 +29,25 @@ const MONEY_COLOR = '#f6c500' // マネーボール（最後＝勝ちボール�
 
 // ===== ラベル =====
 const KANJI = ['一', '二', '三', '四', '五', '六', '七', '八', '九']
-const KANJI_OLD = ['壹', '貳', '參', '肆', '伍', '陸', '漆', '捌', '玖']
+const KANJI_OLD = ['壱', '弐', '参', '肆', '伍', '陸', '漆', '捌', '玖']
+const ROMAN_UPPER = ['Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ']
+const ROMAN_LOWER = ['ⅰ', 'ⅱ', 'ⅲ', 'ⅳ', 'ⅴ', 'ⅵ', 'ⅶ', 'ⅷ', 'ⅸ']
+const GREEK_UPPER = ['Α', 'Β', 'Γ', 'Δ', 'Ε', 'Ζ', 'Η', 'Θ', 'Ι', 'Κ', 'Λ', 'Μ', 'Ν', 'Ξ', 'Ο', 'Π', 'Ρ', 'Σ', 'Τ', 'Υ', 'Φ', 'Χ', 'Ψ', 'Ω']
+const GREEK_LOWER = ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω']
+
+export const LABEL_MODES = ['number', 'english', 'kanji', 'kanji-old', 'roman-upper', 'roman-lower', 'greek-upper', 'greek-lower']
+
+// 配列から「ランダムな開始位置 + 連続n個」を返すラベラー
+function pickConsecutive(arr, n) {
+  const start = Math.floor(Math.random() * (arr.length - n + 1))
+  return (order) => arr[start + order - 1]
+}
 
 function makeLabeler(mode, caseMode, n) {
   if (mode === 'english') {
-    const start = Math.floor(Math.random() * (26 - n + 1)) // 連続n文字がZを超えない開始位置
-    const letters = Array.from({ length: n }, (_, k) => String.fromCharCode(65 + start + k))
-    const cased = letters.map((ch) => {
+    const start = Math.floor(Math.random() * (26 - n + 1))
+    const cased = Array.from({ length: n }, (_, k) => {
+      const ch = String.fromCharCode(65 + start + k)
       if (caseMode === 'lower') return ch.toLowerCase()
       if (caseMode === 'mix') return Math.random() < 0.5 ? ch : ch.toLowerCase()
       return ch
@@ -44,13 +56,18 @@ function makeLabeler(mode, caseMode, n) {
   }
   if (mode === 'kanji') return (order) => KANJI[order - 1]
   if (mode === 'kanji-old') return (order) => KANJI_OLD[order - 1]
+  if (mode === 'roman-upper') return (order) => ROMAN_UPPER[order - 1]
+  if (mode === 'roman-lower') return (order) => ROMAN_LOWER[order - 1]
+  if (mode === 'greek-upper') return pickConsecutive(GREEK_UPPER, n)
+  if (mode === 'greek-lower') return pickConsecutive(GREEK_LOWER, n)
   return (order) => String(order)
 }
 
 export function refOf(game, order) {
   const b = game.balls.find((x) => !x.isCue && x.order === order)
   const label = b ? b.label : String(order)
-  return game.mode === 'english' ? label : `${label}ばん`
+  const noBan = game.mode === 'english' || game.mode === 'greek-upper' || game.mode === 'greek-lower'
+  return noBan ? label : `${label}ばん`
 }
 
 // ===== 幾何ヘルパー =====
@@ -95,6 +112,18 @@ function pointInPolygon(verts, x, y) {
   return inside
 }
 
+// 任意中心の頂点列を、左上が(0,0)になるよう平行移動して bbox の幅高さを返す
+function normalizePoly(rawVerts) {
+  const xs = rawVerts.map((v) => v.x)
+  const ys = rawVerts.map((v) => v.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const W = Math.max(...xs) - minX
+  const H = Math.max(...ys) - minY
+  const verts = rawVerts.map((v) => ({ x: v.x - minX, y: v.y - minY }))
+  return { verts, W, H }
+}
+
 // ===== ラック =====
 // apex（index0）は手球側（下）。rows は上方向へ広がる。
 // 各行は三角格子で半個ずつオフセットされる前提。連続する行の個数を変える
@@ -131,9 +160,44 @@ function moneyIndex(spots) {
   return best
 }
 
+// 星形（n芒星）テーブルを作る。ox/oy で楕円スケール（縦長化）、ir で内側半径比（大きいほど食い込み浅い）。
+function starlikeTable(shape, points, ox, oy, ir, pocketR, anchorFracY, cueFracY) {
+  const raw = []
+  const step = 360 / points
+  for (let k = 0; k < points; k++) {
+    const ao = (-90 + k * step) * (Math.PI / 180)
+    const ai = (-90 + step / 2 + k * step) * (Math.PI / 180)
+    raw.push({ x: ox * Math.cos(ao), y: oy * Math.sin(ao) })
+    raw.push({ x: ox * ir * Math.cos(ai), y: oy * ir * Math.sin(ai) })
+  }
+  const { verts, W, H } = normalizePoly(raw)
+  const pockets = verts.filter((_, i) => i % 2 === 0) // 外側の頂点＝ポケット
+  const segments = segsFromVerts(verts)
+  const cx = W / 2
+  return {
+    shape, pocketR,
+    cw: W + 2 * RAIL, ch: H + 2 * RAIL,
+    segments,
+    pockets,
+    rackAnchor: { cx, apexY: H * anchorFracY },
+    cueSpot: { x: cx, y: H * cueFracY },
+    feltKind: 'poly', feltParams: { verts },
+    contains: (x, y) => pointInPolygon(verts, x, y) && segments.every((s) => distToSeg(x, y, s) >= R),
+  }
+}
+
 // ===== テーブル生成 =====
 export function makeTable(shape = 'rect', pocketSize = 'm') {
   const pocketR = POCKET_SIZES[pocketSize] || POCKET_SIZES.m
+
+  // 縦長・食い込み浅めの5芒星
+  if (shape === 'star') {
+    return starlikeTable('star', 5, 120, 185, 0.74, pocketR, 0.40, 0.56)
+  }
+  // 縦長の六芒星
+  if (shape === 'hexagram') {
+    return starlikeTable('hexagram', 6, 150, 185, 0.60, pocketR, 0.44, 0.62)
+  }
 
   if (shape === 'circle') {
     const cx = 150, cy = 150, CR = 150
@@ -155,34 +219,6 @@ export function makeTable(shape = 'rect', pocketSize = 'm') {
       cueSpot: { x: cx, y: cy + 80 },
       feltKind: 'circle', feltParams: { cx, cy, r: CR },
       contains: (x, y) => len(x - cx, y - cy) <= CR - R,
-    }
-  }
-
-  if (shape === 'star') {
-    const cx = 150, cy = 150, outerR = 150, innerR = 78
-    const verts = []
-    for (let k = 0; k < 5; k++) {
-      const ao = (-90 + k * 72) * (Math.PI / 180)
-      const ai = (-90 + 36 + k * 72) * (Math.PI / 180)
-      verts.push({ x: cx + outerR * Math.cos(ao), y: cy + outerR * Math.sin(ao) })
-      verts.push({ x: cx + innerR * Math.cos(ai), y: cy + innerR * Math.sin(ai) })
-    }
-    const pockets = []
-    for (let k = 0; k < 5; k++) {
-      const ao = (-90 + k * 72) * (Math.PI / 180)
-      pockets.push({ x: cx + outerR * Math.cos(ao), y: cy + outerR * Math.sin(ao) })
-    }
-    const segments = segsFromVerts(verts)
-    return {
-      shape, pocketR,
-      cw: 2 * cx + 2 * RAIL, ch: 2 * cy + 2 * RAIL,
-      segments,
-      pockets,
-      rackAnchor: { cx, apexY: cy },
-      cueSpot: { x: cx, y: cy + 45 },
-      feltKind: 'star', feltParams: { verts },
-      contains: (x, y) =>
-        pointInPolygon(verts, x, y) && segments.every((s) => distToSeg(x, y, s) >= R),
     }
   }
 
@@ -209,7 +245,7 @@ export function makeTable(shape = 'rect', pocketSize = 'm') {
 
 // ===== ゲーム生成 =====
 export function createGame(options = {}) {
-  const mode = ['english', 'kanji', 'kanji-old'].includes(options.mode) ? options.mode : 'number'
+  const mode = LABEL_MODES.includes(options.mode) ? options.mode : 'number'
   const caseMode = options.caseMode || 'upper'
   const ballCount = [3, 5, 9].includes(options.ballCount) ? options.ballCount : 9
   const label = makeLabeler(mode, caseMode, ballCount)

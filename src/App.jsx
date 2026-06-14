@@ -13,6 +13,10 @@ const RAIL_WOOD = '#6d4726'
 
 const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pocketSize: 'm', ballCount: 9 }
 
+// 横スクロール用の左右余白（ワールド単位）。端からのショットでキューを引く余地を作る。
+const MARGIN = 175
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
 // ===== 小物 =====
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
@@ -68,7 +72,8 @@ function drawBall(ctx, x, y, ball) {
     ctx.fillStyle = '#fdfcf8'
     ctx.fill()
     ctx.fillStyle = '#1a1a2e'
-    ctx.font = `800 ${R * 0.7}px 'Nunito', sans-serif`
+    const fsize = label.length >= 3 ? R * 0.42 : label.length === 2 ? R * 0.56 : R * 0.7
+    ctx.font = `800 ${fsize}px 'Nunito', sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(label, x, y + R * 0.06)
@@ -134,7 +139,7 @@ function buildFeltPath(ctx, table) {
   if (k === 'circle') {
     ctx.beginPath()
     ctx.arc(p.cx + RAIL, p.cy + RAIL, p.r, 0, Math.PI * 2)
-  } else if (k === 'star') {
+  } else if (k === 'poly') {
     ctx.beginPath()
     p.verts.forEach((v, i) =>
       i ? ctx.lineTo(v.x + RAIL, v.y + RAIL) : ctx.moveTo(v.x + RAIL, v.y + RAIL),
@@ -276,7 +281,25 @@ const styles = {
     color: THEME_COLOR,
     padding: '0 16px',
   },
-  canvasWrap: { padding: '4px 12px 12px', display: 'flex', justifyContent: 'center' },
+  canvasWrap: { padding: '4px 12px 8px', display: 'flex', justifyContent: 'center' },
+  panBar: { display: 'flex', gap: 8, padding: '0 16px', justifyContent: 'center' },
+  panBtn: {
+    flex: '1 1 0',
+    maxWidth: 130,
+    padding: '8px 6px',
+    borderRadius: 12,
+    border: 'none',
+    background: '#fff',
+    color: THEME_COLOR,
+    fontSize: 14,
+    fontWeight: 800,
+    fontFamily: "'Nunito', sans-serif",
+    cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+    minHeight: 40,
+  },
+  sliderWrap: { padding: '8px 20px 12px' },
+  slider: { width: '100%', accentColor: THEME_COLOR, cursor: 'pointer' },
   canvas: {
     width: '100%',
     maxWidth: 360,
@@ -355,7 +378,8 @@ function GuideModal({ onClose }) {
         <p style={styles.modalText}>② がめんを <b>ドラッグ</b>して むき と つよさを きめる（うしろに ひくほど つよい）</p>
         <p style={styles.modalText}>③ ゆびを <b>はなす</b>と ショット！</p>
         <p style={styles.modalText}>つぎに ねらう ボールは うえに でるよ。</p>
-        <p style={styles.modalText}>⚙️から <b>すうじ / えいご / かんすうじ</b>、テーブルの <b>かたち</b>、<b>あなの おおきさ</b>を えらべるよ。</p>
+        <p style={styles.modalText}>はしを ねらうときは、したの スライダーや ボタンで フィールドを よこに うごかせるよ。ドラッグ中は じどうで スクロールするよ。</p>
+        <p style={styles.modalText}>⚙️から <b>すうじ / えいご / かんすうじ / ローマ / ギリシャ</b>、テーブルの <b>かたち</b>、<b>あなの おおきさ</b>、<b>ボールの かず</b>を えらべるよ。</p>
         <button style={styles.closeBtn} onClick={onClose}>とじる</button>
       </div>
     </div>
@@ -412,7 +436,11 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
           <Pill active={mode === 'number'} onClick={() => setMode('number')}>すうじ 1-9</Pill>
           <Pill active={mode === 'english'} onClick={() => setMode('english')}>えいご ABC</Pill>
           <Pill active={mode === 'kanji'} onClick={() => setMode('kanji')}>かんすうじ 一二三</Pill>
-          <Pill active={mode === 'kanji-old'} onClick={() => setMode('kanji-old')}>きゅうじ 壹貳參</Pill>
+          <Pill active={mode === 'kanji-old'} onClick={() => setMode('kanji-old')}>きゅうじ 壱弐参</Pill>
+          <Pill active={mode === 'roman-upper'} onClick={() => setMode('roman-upper')}>ローマ大 ⅠⅡⅢ</Pill>
+          <Pill active={mode === 'roman-lower'} onClick={() => setMode('roman-lower')}>ローマ小 ⅰⅱⅲ</Pill>
+          <Pill active={mode === 'greek-upper'} onClick={() => setMode('greek-upper')}>ギリシャ大 ΑΒΓ</Pill>
+          <Pill active={mode === 'greek-lower'} onClick={() => setMode('greek-lower')}>ギリシャ小 αβγ</Pill>
         </div>
 
         {mode === 'english' && (
@@ -434,6 +462,7 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
           <Pill active={shape === 'rect'} onClick={() => setShape('rect')}>■ しかく</Pill>
           <Pill active={shape === 'circle'} onClick={() => setShape('circle')}>● まる</Pill>
           <Pill active={shape === 'star'} onClick={() => setShape('star')}>★ ほし</Pill>
+          <Pill active={shape === 'hexagram'} onClick={() => setShape('hexagram')}>✡ ろくぼうせい</Pill>
         </div>
 
         <div style={SECTION}>あなの おおきさ</div>
@@ -465,6 +494,13 @@ export default function App() {
   const aimRef = useRef(null)
   const ghostRef = useRef(null)
   const fitRef = useRef(null)
+  const camRef = useRef(0) // フィールドの横スクロール量（ワールド単位、-MARGIN..+MARGIN）
+  const sliderRef = useRef(null)
+
+  const panTo = (v) => {
+    camRef.current = clamp(v, -MARGIN, MARGIN)
+    if (sliderRef.current) sliderRef.current.value = String(camRef.current)
+  }
 
   const [showGuide, setShowGuide] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -494,6 +530,7 @@ export default function App() {
     gameRef.current = createGame(opts)
     aimRef.current = null
     ghostRef.current = null
+    panTo(0) // 中央表示にもどす
     fitRef.current?.() // 形状が変わると盤の縦横比が変わるため再フィット
     syncUI()
     setShowSettings(false)
@@ -519,20 +556,28 @@ export default function App() {
     }
     fitRef.current = fit
 
+    let lastClient = null // 照準ドラッグ中の最後のポインタ画面座標
+
     const toFelt = (e) => {
       const t = gameRef.current.table
       const rect = canvas.getBoundingClientRect()
-      const tx = ((e.clientX - rect.left) / rect.width) * t.cw
-      const ty = ((e.clientY - rect.top) / rect.height) * t.ch
-      return { x: tx - RAIL, y: ty - RAIL }
+      const wx = camRef.current + ((e.clientX - rect.left) / rect.width) * t.cw
+      const wy = ((e.clientY - rect.top) / rect.height) * t.ch
+      return { x: wx - RAIL, y: wy - RAIL }
     }
 
     const render = () => {
       const g = gameRef.current
       const t = g.table
+      const cam = camRef.current
       const ctx = canvas.getContext('2d')
-      ctx.setTransform(canvas.width / t.cw, 0, 0, canvas.height / t.ch, 0, 0)
-      ctx.clearRect(0, 0, t.cw, t.ch)
+      const sx = canvas.width / t.cw
+      const sy = canvas.height / t.ch
+      ctx.setTransform(sx, 0, 0, sy, -cam * sx, 0)
+      ctx.clearRect(cam, 0, t.cw, t.ch)
+      // 余白の背景（クリーム）
+      ctx.fillStyle = '#FFF8E7'
+      ctx.fillRect(cam - 1, 0, t.cw + 2, t.ch)
       drawTable(ctx, t)
       // 照準
       if (g.phase === 'aiming' && aimRef.current && aimRef.current.power > 0) {
@@ -564,6 +609,28 @@ export default function App() {
           syncUI()
         }
       }
+      // 照準ドラッグが端にあるとき、フィールドを自動スクロール
+      if (g.phase === 'aiming' && dragging && lastClient) {
+        const tbl = g.table
+        const rect = canvas.getBoundingClientRect()
+        const fx = (lastClient.clientX - rect.left) / rect.width
+        const speed = tbl.cw * 1.4
+        let moved = false
+        if (fx < 0.18) {
+          camRef.current = clamp(camRef.current - speed * dt, -MARGIN, MARGIN)
+          moved = true
+        } else if (fx > 0.82) {
+          camRef.current = clamp(camRef.current + speed * dt, -MARGIN, MARGIN)
+          moved = true
+        }
+        if (moved) {
+          if (sliderRef.current) sliderRef.current.value = String(camRef.current)
+          const fy = (lastClient.clientY - rect.top) / rect.height
+          const wx = camRef.current + fx * tbl.cw
+          const wy = fy * tbl.ch
+          aimRef.current = aimFromDrag(cueBall(g), wx - RAIL, wy - RAIL)
+        }
+      }
       render()
       raf = requestAnimationFrame(frame)
     }
@@ -581,6 +648,7 @@ export default function App() {
       }
       if (g.phase === 'aiming') {
         dragging = true
+        lastClient = { clientX: e.clientX, clientY: e.clientY }
         canvas.setPointerCapture?.(e.pointerId)
         aimRef.current = aimFromDrag(cueBall(g), p.x, p.y)
       }
@@ -594,6 +662,7 @@ export default function App() {
         return
       }
       if (g.phase === 'aiming' && dragging) {
+        lastClient = { clientX: e.clientX, clientY: e.clientY }
         aimRef.current = aimFromDrag(cueBall(g), p.x, p.y)
       }
     }
@@ -602,6 +671,7 @@ export default function App() {
       const g = gameRef.current
       if (g.phase === 'aiming' && dragging) {
         dragging = false
+        lastClient = null
         canvas.releasePointerCapture?.(e.pointerId)
         const aim = aimRef.current
         if (aim && aim.power > 0.06) {
@@ -670,6 +740,25 @@ export default function App() {
 
       <div style={styles.canvasWrap}>
         <canvas ref={canvasRef} style={styles.canvas} />
+      </div>
+
+      <div style={styles.panBar}>
+        <button style={styles.panBtn} onClick={() => panTo(-MARGIN)} aria-label="ひだりはじ">◀ はじ</button>
+        <button style={styles.panBtn} onClick={() => panTo(0)} aria-label="まんなか">● まんなか</button>
+        <button style={styles.panBtn} onClick={() => panTo(MARGIN)} aria-label="みぎはじ">はじ ▶</button>
+      </div>
+      <div style={styles.sliderWrap}>
+        <input
+          ref={sliderRef}
+          type="range"
+          min={-MARGIN}
+          max={MARGIN}
+          step={1}
+          defaultValue={0}
+          onInput={(e) => { camRef.current = Number(e.target.value) }}
+          style={styles.slider}
+          aria-label="フィールドの よこスクロール"
+        />
       </div>
 
       {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
