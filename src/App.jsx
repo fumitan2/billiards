@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  PW, PH, R, RAIL, POCKET_R, POCKETS,
+  R, RAIL,
   SHOT_MAX_SPEED, FIXED_DT,
   createGame, cueBall, targetBall, canPlaceCue, placeCue, advance, allStopped, resolveShot, aimFromDrag,
 } from './billiards.js'
@@ -11,10 +11,7 @@ const THEME_COLOR = '#1565c0'
 const FELT_GREEN = '#1f7a44'
 const RAIL_WOOD = '#6d4726'
 
-const TW = PW + 2 * RAIL
-const TH = PH + 2 * RAIL
-
-const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper' }
+const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pocketSize: 'm' }
 
 // ===== 小物 =====
 function roundRect(ctx, x, y, w, h, r) {
@@ -84,7 +81,7 @@ function drawBall(ctx, x, y, ball) {
   ctx.stroke()
 }
 
-function drawAim(ctx, cue, aim) {
+function drawAim(ctx, cue, aim, table) {
   const cx = cue.x + RAIL
   const cy = cue.y + RAIL
   const { dirx, diry, power } = aim
@@ -117,16 +114,58 @@ function drawAim(ctx, cue, aim) {
   ctx.moveTo(cx - dirx * (back + 120), cy - diry * (back + 120))
   ctx.lineTo(cx - dirx * (back + 150), cy - diry * (back + 150))
   ctx.stroke()
-  // パワーメーター（フェルト下部）
-  const barW = PW * 0.6
-  const bx = RAIL + (PW - barW) / 2
-  const by = RAIL + PH - 14
+  // パワーメーター（盤面下部）
+  const barW = table.cw * 0.5
+  const bx = (table.cw - barW) / 2
+  const by = table.ch - RAIL * 0.62
   roundRect(ctx, bx, by, barW, 8, 4)
-  ctx.fillStyle = 'rgba(0,0,0,0.3)'
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'
   ctx.fill()
   if (power > 0) {
     roundRect(ctx, bx, by, barW * power, 8, 4)
     ctx.fillStyle = lerpColor('#4caf50', '#f44336', power)
+    ctx.fill()
+  }
+}
+
+// テーブル描画（形状ごと）
+function buildFeltPath(ctx, table) {
+  const { feltKind: k, feltParams: p } = table
+  if (k === 'circle') {
+    ctx.beginPath()
+    ctx.arc(p.cx + RAIL, p.cy + RAIL, p.r, 0, Math.PI * 2)
+  } else if (k === 'star') {
+    ctx.beginPath()
+    p.verts.forEach((v, i) =>
+      i ? ctx.lineTo(v.x + RAIL, v.y + RAIL) : ctx.moveTo(v.x + RAIL, v.y + RAIL),
+    )
+    ctx.closePath()
+  } else {
+    roundRect(ctx, RAIL, RAIL, p.W, p.H, 10)
+  }
+}
+
+function drawTable(ctx, table) {
+  // 木枠
+  roundRect(ctx, 0, 0, table.cw, table.ch, RAIL * 0.7)
+  ctx.fillStyle = RAIL_WOOD
+  ctx.fill()
+  roundRect(ctx, 4, 4, table.cw - 8, table.ch - 8, RAIL * 0.5)
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+  // フェルト
+  buildFeltPath(ctx, table)
+  ctx.fillStyle = FELT_GREEN
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)'
+  ctx.lineWidth = 3
+  ctx.stroke()
+  // ポケット
+  for (const pk of table.pockets) {
+    ctx.beginPath()
+    ctx.arc(pk.x + RAIL, pk.y + RAIL, table.pocketR * 1.06, 0, Math.PI * 2)
+    ctx.fillStyle = '#14141a'
     ctx.fill()
   }
 }
@@ -316,7 +355,7 @@ function GuideModal({ onClose }) {
         <p style={styles.modalText}>② がめんを <b>ドラッグ</b>して むき と つよさを きめる（うしろに ひくほど つよい）</p>
         <p style={styles.modalText}>③ ゆびを <b>はなす</b>と ショット！</p>
         <p style={styles.modalText}>つぎに ねらう ボールは うえに でるよ。</p>
-        <p style={styles.modalText}>⚙️から <b>すうじ / えいご</b>の モードを えらべるよ。</p>
+        <p style={styles.modalText}>⚙️から <b>すうじ / えいご / かんすうじ</b>、テーブルの <b>かたち</b>、<b>あなの おおきさ</b>を えらべるよ。</p>
         <button style={styles.closeBtn} onClick={onClose}>とじる</button>
       </div>
     </div>
@@ -347,24 +386,31 @@ function Pill({ active, onClick, children }) {
   )
 }
 
+const SECTION = { fontSize: 14, fontWeight: 800, color: '#666', marginBottom: 8 }
+const ROW = { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }
+
 function SettingsModal({ options, onApply, onReset, onClose }) {
   const [mode, setMode] = useState(options.mode)
   const [caseMode, setCaseMode] = useState(options.caseMode)
+  const [shape, setShape] = useState(options.shape)
+  const [pocketSize, setPocketSize] = useState(options.pocketSize)
   return (
     <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...styles.modal, maxHeight: '86vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalTitle}>せってい</div>
 
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#666', marginBottom: 8 }}>ボールの モード</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={SECTION}>ボールの モード</div>
+        <div style={ROW}>
           <Pill active={mode === 'number'} onClick={() => setMode('number')}>すうじ 1-9</Pill>
           <Pill active={mode === 'english'} onClick={() => setMode('english')}>えいご ABC</Pill>
+          <Pill active={mode === 'kanji'} onClick={() => setMode('kanji')}>かんすうじ 一二三</Pill>
+          <Pill active={mode === 'kanji-old'} onClick={() => setMode('kanji-old')}>きゅうじ 壹貳參</Pill>
         </div>
 
         {mode === 'english' && (
           <>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#666', marginBottom: 8 }}>もじの しゅるい</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <div style={SECTION}>もじの しゅるい</div>
+            <div style={ROW}>
               <Pill active={caseMode === 'upper'} onClick={() => setCaseMode('upper')}>大もじ ABC</Pill>
               <Pill active={caseMode === 'lower'} onClick={() => setCaseMode('lower')}>小もじ abc</Pill>
               <Pill active={caseMode === 'mix'} onClick={() => setCaseMode('mix')}>ミックス Ab</Pill>
@@ -375,14 +421,28 @@ function SettingsModal({ options, onApply, onReset, onClose }) {
           </>
         )}
 
-        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode })}>
-          このモードで はじめる
+        <div style={SECTION}>ビリヤードだい</div>
+        <div style={ROW}>
+          <Pill active={shape === 'rect'} onClick={() => setShape('rect')}>■ しかく</Pill>
+          <Pill active={shape === 'circle'} onClick={() => setShape('circle')}>● まる</Pill>
+          <Pill active={shape === 'star'} onClick={() => setShape('star')}>★ ほし</Pill>
+        </div>
+
+        <div style={SECTION}>あなの おおきさ</div>
+        <div style={ROW}>
+          <Pill active={pocketSize === 's'} onClick={() => setPocketSize('s')}>ちいさい</Pill>
+          <Pill active={pocketSize === 'm'} onClick={() => setPocketSize('m')}>ふつう</Pill>
+          <Pill active={pocketSize === 'l'} onClick={() => setPocketSize('l')}>おおきい</Pill>
+        </div>
+
+        <button style={{ ...styles.closeBtn, marginTop: 8 }} onClick={() => onApply({ mode, caseMode, shape, pocketSize })}>
+          このせっていで はじめる
         </button>
         <button
           style={{ ...styles.closeBtn, backgroundColor: '#f4511e', marginTop: 10 }}
           onClick={onReset}
         >
-          いまのモードで やりなおす
+          いまのままで やりなおす
         </button>
         <p style={styles.versionText}>v{APP_VERSION}</p>
         <button style={{ ...styles.closeBtn, backgroundColor: '#999' }} onClick={onClose}>とじる</button>
@@ -396,6 +456,7 @@ export default function App() {
   const gameRef = useRef(createGame(DEFAULT_OPTIONS))
   const aimRef = useRef(null)
   const ghostRef = useRef(null)
+  const fitRef = useRef(null)
 
   const [showGuide, setShowGuide] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -425,6 +486,7 @@ export default function App() {
     gameRef.current = createGame(opts)
     aimRef.current = null
     ghostRef.current = null
+    fitRef.current?.() // 形状が変わると盤の縦横比が変わるため再フィット
     syncUI()
     setShowSettings(false)
   }
@@ -437,50 +499,36 @@ export default function App() {
     let dragging = false
     let shotInfo = null
 
-    // 描画サイズ調整
+    // 描画サイズ調整（現在のテーブル形状の縦横比に合わせる）
     const fit = () => {
+      const t = gameRef.current.table
       const dpr = Math.min(window.devicePixelRatio || 1, 2.5)
       const cssW = canvas.clientWidth
-      const cssH = cssW * (TH / TW)
+      const cssH = cssW * (t.ch / t.cw)
       canvas.style.height = `${cssH}px`
       canvas.width = Math.round(cssW * dpr)
       canvas.height = Math.round(cssH * dpr)
     }
+    fitRef.current = fit
 
     const toFelt = (e) => {
+      const t = gameRef.current.table
       const rect = canvas.getBoundingClientRect()
-      const tx = ((e.clientX - rect.left) / rect.width) * TW
-      const ty = ((e.clientY - rect.top) / rect.height) * TH
+      const tx = ((e.clientX - rect.left) / rect.width) * t.cw
+      const ty = ((e.clientY - rect.top) / rect.height) * t.ch
       return { x: tx - RAIL, y: ty - RAIL }
     }
 
     const render = () => {
-      const ctx = canvas.getContext('2d')
-      ctx.setTransform(canvas.width / TW, 0, 0, canvas.height / TH, 0, 0)
-      ctx.clearRect(0, 0, TW, TH)
-      // レール（木枠）
-      roundRect(ctx, 0, 0, TW, TH, RAIL * 0.7)
-      ctx.fillStyle = RAIL_WOOD
-      ctx.fill()
-      roundRect(ctx, 4, 4, TW - 8, TH - 8, RAIL * 0.5)
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-      ctx.lineWidth = 2
-      ctx.stroke()
-      // フェルト
-      roundRect(ctx, RAIL, RAIL, PW, PH, 10)
-      ctx.fillStyle = FELT_GREEN
-      ctx.fill()
-      // ポケット
-      for (const p of POCKETS) {
-        ctx.beginPath()
-        ctx.arc(p.x + RAIL, p.y + RAIL, POCKET_R * 1.05, 0, Math.PI * 2)
-        ctx.fillStyle = '#14141a'
-        ctx.fill()
-      }
       const g = gameRef.current
+      const t = g.table
+      const ctx = canvas.getContext('2d')
+      ctx.setTransform(canvas.width / t.cw, 0, 0, canvas.height / t.ch, 0, 0)
+      ctx.clearRect(0, 0, t.cw, t.ch)
+      drawTable(ctx, t)
       // 照準
       if (g.phase === 'aiming' && aimRef.current && aimRef.current.power > 0) {
-        drawAim(ctx, cueBall(g), aimRef.current)
+        drawAim(ctx, cueBall(g), aimRef.current, t)
       }
       // ゴースト（手球配置）
       if (g.phase === 'ballInHand' && ghostRef.current) {
@@ -499,7 +547,7 @@ export default function App() {
       if (g.phase === 'shooting') {
         acc += dt
         while (acc >= FIXED_DT) {
-          advance(g.balls, FIXED_DT, shotInfo)
+          advance(g.balls, FIXED_DT, shotInfo, g.table)
           acc -= FIXED_DT
         }
         if (allStopped(g.balls)) {
@@ -576,6 +624,7 @@ export default function App() {
 
     return () => {
       cancelAnimationFrame(raf)
+      fitRef.current = null
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
