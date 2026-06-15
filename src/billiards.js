@@ -72,6 +72,7 @@ export function refOf(game, order) {
 
 // ===== よみかた =====
 const NUM_YOMI = ['いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう']
+const ENG_NUM_YOMI = ['ワン', 'ツー', 'スリー', 'フォー', 'ファイブ', 'シックス', 'セブン', 'エイト', 'ナイン']
 const LATIN_YOMI = {
   A: 'エー', B: 'ビー', C: 'シー', D: 'ディー', E: 'イー', F: 'エフ', G: 'ジー', H: 'エイチ',
   I: 'アイ', J: 'ジェー', K: 'ケー', L: 'エル', M: 'エム', N: 'エヌ', O: 'オー', P: 'ピー',
@@ -90,7 +91,8 @@ export function readingOf(game, order) {
   const m = game.mode
   if (m === 'english') return LATIN_YOMI[b.label.toUpperCase()] || ''
   if (m === 'greek-upper' || m === 'greek-lower') return GREEK_YOMI[b.label] || ''
-  return NUM_YOMI[order - 1] || '' // number / kanji / kanji-old / roman は順番の数の読み
+  if (m === 'roman-upper' || m === 'roman-lower') return ENG_NUM_YOMI[order - 1] || '' // ローマ数字は英語読み
+  return NUM_YOMI[order - 1] || '' // number / kanji / kanji-old は数の読み
 }
 
 // ===== 幾何ヘルパー =====
