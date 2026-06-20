@@ -1,4 +1,4 @@
-# CLAUDE.md — fumitan2 子ども練習アプリ シリーズ共通ルール
+# CLAUDE.md — shumiya-pe 子ども練習アプリ シリーズ共通ルール
 
 このファイルはすべてのアプリリポジトリのルートに置く。
 Claude Code が作業を始める前に必ず読むこと。
@@ -22,14 +22,14 @@ Claude Code が作業を始める前に必ず読むこと。
 
 **All Rights Reserved（ライセンスなし）**
 
-- このシリーズのすべてのコード・素材は fumitan2 に著作権が帰属する
+- このシリーズのすべてのコード・素材は shumiya-pe に著作権が帰属する
 - リポジトリは Private で管理する
 - LICENSE ファイルは作成しない
 - 第三者への公開・再配布・商用利用は一切許可しない
 - README.md の末尾に必ず以下を記載すること：
 
 ```
-© 2026 fumitan2. All Rights Reserved.
+© 2026 shumiya-pe. All Rights Reserved.
 ```
 
 ---
