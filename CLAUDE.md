@@ -1,4 +1,4 @@
-# CLAUDE.md — fumitan2 子ども練習アプリ シリーズ共通ルール
+# CLAUDE.md — shumiya-pe 子ども練習アプリ シリーズ共通ルール
 
 このファイルはすべてのアプリリポジトリのルートに置く。
 Claude Code が作業を始める前に必ず読むこと。
@@ -22,14 +22,14 @@ Claude Code が作業を始める前に必ず読むこと。
 
 **All Rights Reserved（ライセンスなし）**
 
-- このシリーズのすべてのコード・素材は fumitan2 に著作権が帰属する
+- このシリーズのすべてのコード・素材は shumiya-pe に著作権が帰属する
 - リポジトリは Private で管理する
 - LICENSE ファイルは作成しない
 - 第三者への公開・再配布・商用利用は一切許可しない
 - README.md の末尾に必ず以下を記載すること：
 
 ```
-© 2026 fumitan2. All Rights Reserved.
+© 2026 shumiya-pe. All Rights Reserved.
 ```
 
 ---
@@ -61,15 +61,25 @@ Claude Code が作業を始める前に必ず読むこと。
 ├── README.md             # アプリ説明・開発コマンド・© 表記
 ├── SPEC.md               # 仕様書（要件・問題設計・UI設計）
 ├── CHANGELOG.md          # バージョン別の変更履歴
+├── twa-manifest.json     # TWA(Bubblewrap)設定（Google Play配信する場合のみ・§13）
+├── scripts/              # アイコン生成スクリプト（§12）
+│   ├── png-util.mjs      #   依存なしの PNG decode/encode/resize
+│   ├── prep-icon.mjs     #   元画像の背景透過→trim→正方形化
+│   └── gen-icons.js      #   透過ソースから各サイズ生成
 ├── public/
-│   └── icons/
-│       ├── icon-192.png
-│       └── icon-512.png
+│   ├── {元画像}.png       # アイコン元画像（単色背景の PNG・例: clock-sheep.png）
+│   ├── favicon.ico       # ブラウザタブ用（元画像から生成）
+│   ├── apple-touch-icon-180x180.png  # iOS ホーム画面用（180px・元画像から生成）
+│   ├── pwa-192x192.png   # PWA用（透過・purpose: any）
+│   ├── pwa-512x512.png   # PWA用（透過・purpose: any）
+│   └── maskable-icon-512x512.png     # Android用（背景付き・purpose: maskable・§12必須）
 └── src/
     ├── main.jsx
     ├── index.css         # グローバルリセットのみ
     └── App.jsx           # アプリ本体（原則単一ファイルに集約）
 ```
+
+※ `public/icon-source.png`（透過の中間生成物）は元画像から再生成できるため `.gitignore` に入れる。
 
 ---
 
@@ -242,6 +252,52 @@ choiceButton: {
 - モーダル背景：`rgba(0,0,0,0.5)` のオーバーレイ
 - モーダル本体：白背景・角丸（`borderRadius: '20px'`）・`padding: '24px'`
 
+### スプラッシュスクリーン
+
+起動直後に一瞬だけ表示し、自動でフェードアウトして本編に入る。**全アプリ共通**で実装する。
+
+#### 表示ルール
+
+- アプリ起動時に **1回だけ** 表示する（`splashDone` を App ルートの state で管理し、`!splashDone` の間だけ描画）。
+- **自動で消える**（タップ不要）。表示 → フェードアウトの目安タイミング：
+  - `1400ms` 表示 → `opacity` を `0.5s ease` でフェード → `1900ms` で `onDone()`
+- 全画面オーバーレイ：`position: fixed / inset: 0 / zIndex: 9999 / pointerEvents: 'none'`
+- 背景は **アプリ背景色（`#FFF8E7`）**。装飾としてテーマカラー/アクセント色の淡い `radial-gradient` を重ねてよい（透明度 `~0.2` 程度）。
+
+#### 構成要素（上から縦並び・中央寄せ）
+
+| 要素 | 内容 | スタイル目安 |
+|---|---|---|
+| アイコン | `public/pwa-192x192.png` を流用 | `120px` 角丸 `28px`・ドロップシャドウ |
+| アプリ名 | 例「なんじかな？」 | 太字 `900`・`28px`・メインテキスト色 |
+| サブタイトル | ひらがなの副題（例「とけいれんしゅう」） | 太字 `800`・`14px`・サブ色 |
+| バージョン | `v{pkg.version}` | `700`・`12px`・薄いグレー |
+
+- 各要素は `@keyframes pop`（`scale(0) → 1.18 → 1`）で **少しずつ遅延**させて登場させる（`delay: 0 / .15s / .25s / .35s`）。
+- アイコンは PWA 用画像（`pwa-192x192.png`）をそのまま使い、**スプラッシュ専用画像は作らない**。
+
+#### バージョン表示について
+
+§5 では「バージョンは子どもが見るエリアには表示しない」としているが、**スプラッシュ末尾の小さな薄色表示は例外として許可**する（一瞬かつ目立たないため）。設定パネル内の表示（§5）と二重に出してよい。
+
+```jsx
+// スプラッシュの実装例（App ルート）
+function SplashScreen({ onDone }) {
+  const [fading, setFading] = useState(false)
+  useEffect(() => {
+    const t1 = setTimeout(() => setFading(true), 1400)
+    const t2 = setTimeout(() => onDone(), 1900)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [onDone])
+  // 背景 #FFF8E7 + radial-gradient、アイコン/アプリ名/サブ/バージョンを pop で登場
+}
+
+// App 本体
+if (!splashDone) {
+  return (<><style>{GLOBAL_CSS}</style><SplashScreen onDone={() => setSplashDone(true)} /></>)
+}
+```
+
 ---
 
 ## 8. しょうぶモード 共通仕様
@@ -389,7 +445,7 @@ scoreRow: {
 
 ---
 
-## 9. 開発コマンド（標準）
+## 10. 開発コマンド（標準）
 
 ```bash
 npm install       # 依存インストール
@@ -400,10 +456,158 @@ npm run preview   # ビルド結果のローカル確認
 
 ---
 
-## 10. 作業時の注意
+## 11. 作業時の注意
 
 - コードはシンプルに保つ（動作の安定性を最優先）
 - 外部 API・サーバー不要（完全クライアントサイド）
 - ランダム問題生成は前の問題と同じにならないよう注意
 - 機能を変えたら必ず `package.json` と `CHANGELOG.md` を更新する
 - LICENSE ファイルは作成しない
+
+---
+
+## 12. アイコン生成（共通手順）
+
+キャラクター等の**1枚の元画像**から、PWA / favicon / Android maskable 用のアイコンを
+**依存ライブラリなしの純 Node スクリプト**で生成する。ImageMagick・sharp は不要。
+
+### 元画像の条件
+
+- **単色の背景**を持つ正方形に近い PNG（背景透過処理がしやすい）
+- `public/{元画像}.png` に置く（例: `clock-sheep.png`）
+
+### スクリプト構成（`scripts/`）
+
+| ファイル | 役割 |
+|---|---|
+| `png-util.mjs` | 依存なしの PNG decode / encode / resize（既存の zlib のみ使用） |
+| `prep-icon.mjs` | 元画像の単色背景を四隅から floodfill で透過 → trim → 透過パディングで正方形化 → `public/icon-source.png` |
+| `gen-icons.js` | `icon-source.png` から各サイズを生成（pwa-192x192/pwa-512x512 透過、maskable-icon-512x512 背景付き、apple-touch-icon-180x180、favicon.ico） |
+
+### npm スクリプト
+
+```json
+// package.json
+"scripts": {
+  "prep-icon": "node scripts/prep-icon.mjs",
+  "icons": "npm run prep-icon && node scripts/gen-icons.js"
+}
+```
+
+- `npm run icons` … 透過処理 → 全アイコン生成（前準備込み）
+
+### maskable アイコンは必須（Android スプラッシュ対策）
+
+Android は **スプラッシュ画面とアダプティブアイコンを円形等にマスク**し、
+**透過部分を黒く塗る**。透過 PNG をそのまま `purpose: "maskable"` に指定すると
+「円の中が黒背景＋ロゴ」になる不具合が出る。
+
+→ **背景色（`background_color` と同じ）を全面に敷き、ロゴを安全領域（中央 ~72%）に
+  配置した専用 maskable アイコン**を別途生成し、それを maskable に割り当てる。
+  透過版は `any` 用に残す。
+
+```js
+// vite.config.js の manifest.icons
+// vite-plugin-pwa 標準命名に統一。any と maskable を名前で取り違えないこと。
+icons: [
+  { src: "pwa-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+  { src: "pwa-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+  { src: "maskable-icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+]
+```
+
+### favicon / apple-touch-icon
+
+- 同じ元画像から `public/favicon.ico` と 180x180 の `public/apple-touch-icon-180x180.png` を生成し、`index.html` で参照する。
+
+```html
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+```
+
+### 確認方法
+
+- 生成物は colorType 6（RGBA）になっているか確認する。
+- maskable は「円マスクしてもロゴが欠けず、背景に黒が出ない」ことを確認する。
+- 反映後 Android で黒い円が出る場合は **PWA を再インストール**（OS がアイコンを強くキャッシュするため）。
+
+---
+
+## 13. TWA化 / Google Play 配信（共通手順）
+
+PWA を **Bubblewrap CLI** で TWA（Trusted Web Activity）として AAB 化し、Google Play に配信する。
+※ PWABuilder は不安定なことがあるため **Bubblewrap を標準**とする。
+
+### 前提ツール
+
+| ツール | 備考 |
+|---|---|
+| Node.js | 既存 |
+| `@bubblewrap/cli` | `npm i -g @bubblewrap/cli` |
+| JDK 17 + Android SDK | **方法A（推奨）**: `bubblewrap init` 実行時に「自動インストールするか」と聞かれ Yes で `~/.bubblewrap/` に入る。TWA用途だけならこれで十分。<br>**方法B**: システムに Temurin JDK17 + Android cmdline-tools を入れる（Android開発全般をやる場合のみ） |
+
+### 手順
+
+```bash
+# 1. CLI
+npm i -g @bubblewrap/cli
+
+# 2. init（Webリポジトリとは別の空ディレクトリで実行）
+mkdir -p ~/ws/{app-name}-twa && cd ~/ws/{app-name}-twa
+bubblewrap init --manifest https://{app}.vercel.app/manifest.webmanifest
+
+# 3. build → app-release-bundle.aab（Play用）, app-release-signed.apk（実機確認用）
+bubblewrap build
+```
+
+**init の入力**（manifest から自動入力されるので大半は Enter）:
+- **Domain** … Web のドメイン（`{app}.vercel.app`）。アプリIDと間違えやすいので注意
+- **Application ID** … ここだけ手入力。`com.{developer}.{app}` 形式（例: `com.shumiya.nanjikana`）
+- **Key store password / Key password** … **自分で決めて控える**
+
+### 署名キーストアの扱い（重要）
+
+- **`android.keystore` と init で決めたパスワードは絶対に紛失しない。** 失うとアプリ更新が永久に不可。
+- **git にコミットしない**（private リポジトリでも禁止）。git の外で安全にバックアップする。
+- パスワードは twa-manifest.json には保存されない（build 時入力）ため、設定ファイル自体に秘密情報はない。
+
+### 版管理の方針
+
+- **TWA プロジェクト本体は Web リポジトリと別管理**（`~/ws/{app-name}-twa/` のまま）。
+  gradle 一式・`app/` は `bubblewrap build`/`update` で再生成できるので git 化しなくてよい。
+- **版管理するのは `twa-manifest.json` だけ**（Web リポジトリ直下に置く）。これで構成を再現できる。
+- **コミットしないもの**: `android.keystore` / `*.aab` / `*.apk` / `.gradle/` / `build/` / `app/build/`。
+
+### SHA256 フィンガープリント（assetlinks 用）
+
+署名済み APK からパスワード不要で取得できる:
+
+```bash
+keytool -printcert -jarfile app-release-signed.apk | grep "SHA256:"
+```
+
+### assetlinks.json（アドレスバーを消すために必須）
+
+`https://{app}.vercel.app/.well-known/assetlinks.json`（= `public/.well-known/assetlinks.json`）に配置:
+
+```json
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.{developer}.{app}",
+    "sha256_cert_fingerprints": ["<SHA-256>"]
+  }
+}]
+```
+
+⚠️ **Play アプリ署名を使う場合（新規アプリは通常自動で有効）**、`assetlinks.json` に入れるのは
+**ローカル keystore の SHA-256 ではなく、Play Console の「アプリの整合性 → アプリ署名鍵証明書」に
+表示される Google の SHA-256**。ローカル鍵の値だと TWA のアドレスバーが消えない。
+内部テスト用に両方の SHA-256 を配列に入れておくと確実。
+
+### Play Console 側（手動・Claude では代行不可）
+
+- 開発者登録（初回 $25）と**新規アプリの初回登録・AAB アップロードは Web の Play Console から手動**で行う。
+- Google アカウント認証が必要なため Claude Code では代行できない。
+- アップロード後に表示される Google の署名鍵 SHA-256 を取得 → assetlinks.json に反映 → デプロイ。

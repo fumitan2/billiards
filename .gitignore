@@ -1,3 +1,6 @@
+# アイコンの中間生成物（元画像から再生成できる）
+public/icon-source.png
+
 # Logs
 logs
 *.log

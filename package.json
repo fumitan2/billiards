@@ -1,13 +1,15 @@
 {
   "name": "nine-ball",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prep-icon": "node scripts/prep-icon.mjs",
+    "icons": "npm run prep-icon && node scripts/gen-icons.js"
   },
   "dependencies": {
     "react": "^19.0.0",
