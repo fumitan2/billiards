@@ -17,6 +17,48 @@ const DEFAULT_OPTIONS = { mode: 'number', caseMode: 'upper', shape: 'rect', pock
 const MARGIN = 175
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
+// ===== スプラッシュスクリーン（CLAUDE.md §7） =====
+const SPLASH_SUBTITLE = 'びりやーどで あそぼう'
+const GLOBAL_CSS = `
+@keyframes splashPop {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+`
+
+function SplashScreen({ onDone }) {
+  const [fading, setFading] = useState(false)
+  useEffect(() => {
+    const t1 = setTimeout(() => setFading(true), 1400)
+    const t2 = setTimeout(() => onDone(), 1900)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [onDone])
+
+  const pop = (delay) => ({ animation: `splashPop 0.5s ${delay}s both` })
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'none',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 14, background: '#FFF8E7',
+        backgroundImage: `radial-gradient(circle at 50% 38%, ${THEME_COLOR}33 0%, transparent 60%)`,
+        opacity: fading ? 0 : 1, transition: 'opacity 0.5s ease',
+      }}
+    >
+      <img
+        src="/pwa-192x192.png"
+        alt=""
+        style={{ width: 120, height: 120, borderRadius: 28, filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.2))', ...pop(0) }}
+      />
+      <div style={{ fontSize: 28, fontWeight: 900, color: '#1a1a2e', ...pop(0.15) }}>{APP_NAME}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: '#666', ...pop(0.25) }}>{SPLASH_SUBTITLE}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#bbb', ...pop(0.35) }}>v{APP_VERSION}</div>
+    </div>
+  )
+}
+
 // ===== 小物 =====
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
@@ -512,6 +554,7 @@ export default function App() {
     if (sliderRef.current) sliderRef.current.value = String(camRef.current)
   }
 
+  const [splashDone, setSplashDone] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
@@ -733,6 +776,8 @@ export default function App() {
 
   return (
     <div style={styles.container}>
+      <style>{GLOBAL_CSS}</style>
+      {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
       <header style={styles.header}>
         <span style={styles.headerTitle}>{APP_NAME}</span>
         <button style={styles.iconBtn} onClick={() => setShowGuide(true)} aria-label="あそびかた">ℹ️</button>
