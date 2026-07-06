@@ -1,7 +1,7 @@
-# CLAUDE.md — shumiya-pe 子ども練習アプリ シリーズ共通ルール
+# AGENTS.md — shumiya-pe 子ども練習アプリ シリーズ共通ルール
 
 このファイルはすべてのアプリリポジトリのルートに置く。
-Claude Code が作業を始める前に必ず読むこと。
+Codex が作業を始める前に必ず読むこと。
 各アプリ固有の仕様は `SPEC.md` を参照すること。
 
 ## 0. ws運用
@@ -65,7 +65,7 @@ Claude Code が作業を始める前に必ず読むこと。
 ├── package.json          # version フィールドでバージョン管理
 ├── package-lock.json
 ├── .gitignore
-├── CLAUDE.md             # 本ファイル
+├── AGENTS.md             # 本ファイル
 ├── README.md             # アプリ説明・開発コマンド・© 表記
 ├── SPEC.md               # 仕様書（要件・問題設計・UI設計）
 ├── CHANGELOG.md          # バージョン別の変更履歴
@@ -624,8 +624,8 @@ keytool -printcert -jarfile app-release-signed.apk | grep "SHA256:"
 表示される Google の SHA-256**。ローカル鍵の値だと TWA のアドレスバーが消えない。
 内部テスト用に両方の SHA-256 を配列に入れておくと確実。
 
-### Play Console 側（手動・Claude では代行不可）
+### Play Console 側（手動・Codex では代行不可）
 
 - 開発者登録（初回 $25）と**新規アプリの初回登録・AAB アップロードは Web の Play Console から手動**で行う。
-- Google アカウント認証が必要なため Claude Code では代行できない。
+- Google アカウント認証が必要なため Codex では代行できない。
 - アップロード後に表示される Google の署名鍵 SHA-256 を取得 → assetlinks.json に反映 → デプロイ。
