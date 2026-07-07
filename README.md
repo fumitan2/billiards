@@ -41,4 +41,4 @@ npm run preview   # ビルド結果のローカル確認
 
 ---
 
-© 2026 fumitan2. All Rights Reserved.
+© 2026 shumiya-pe. All Rights Reserved.
