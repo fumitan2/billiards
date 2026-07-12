@@ -30,7 +30,7 @@ npm run preview   # ビルド結果のローカル確認
 ## デプロイ
 
 - **Web**：`main` ブランチへの push で Vercel が自動デプロイ（Vite プリセット、`dist/` を配信）
-- **Google Play（将来）**：PWA を [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap) で TWA としてラップして AAB を生成 → Play Console に投入する想定。`vite-plugin-pwa` の manifest（standalone / portrait / アイコン）とHTTPS配信（Vercel）が前提条件を満たしています。公開後は `public/.well-known/assetlinks.json`（署名鍵のフィンガープリント）を追加します。
+- **Google Play（将来）**：シリーズ共通方針に合わせて Capacitor Android で AAB を生成し、Play Console に投入する想定。`vite-plugin-pwa` の manifest（standalone / portrait / アイコン）とHTTPS配信（Vercel）は Web/PWA 向けに維持します。
 
 ## 技術スタック
 
